@@ -176,24 +176,31 @@ class CalendarUI:
         # Προσαρμογή σε customtkinter (χωρίς φυτεμένο label στο frame)
         # Διόρθωση root σε self.root ώστε να αλλάζει δυναμικα;
         self.calendar_frame = ctk.CTkFrame(master = self.calendar_container, fg_color="transparent")
-        self.calendar_frame.pack(pady=10, fill="x", padx=10, expand=True)
+        self.calendar_frame.pack(pady=10, fill="x", padx=10,  expand=True)
         self.label = ctk.CTkLabel(master = self.calendar_frame ,text=f"Ημερολόγιο - Μήνας: {self.current_month}/{self.current_year}")
         self.label.pack(pady=10, padx=10, fill="x", anchor="w")
 
         # Για customtkinter κάνω pack ακόμα ένα container του grid των κουμπιών
-        cal_grid_container = ctk.CTkFrame(master = self.calendar_frame, fg_color="transparent")
+        cal_grid_container = ctk.CTkFrame(master = self.calendar_frame, fg_color="transparent",border_width=3, border_color="gray50",)#Το border το έχουμε προσορινά για να μας βοηθά στην δημιουργία του UI
         cal_grid_container.pack(pady=5, padx=10)
+        
+        #Το uniform="group1" θα δίνει ίδιο πλάτος για όλα
+        for i in range(7):
+            cal_grid_container.grid_columnconfigure(i, weight=1, uniform="group1")
 
 
         # Δημιουργία κουμπιών πλοήγησης
         # Για customtkinter αλλαγή self.calendar_frame σε cal_grid_container
-        ctk.CTkButton(cal_grid_container, text="<", command=lambda: self.change_month(-1)).grid(row=0, column=0)#Μήνα πίσω
-        ctk.CTkButton(cal_grid_container, text=">", command=lambda: self.change_month(1)).grid(row=0, column=6)#Μήνα επόμενο
+        ctk.CTkButton(cal_grid_container, text="<", width=45, 
+                      command=lambda: self.change_month(-1)).grid(row=0, column=0, sticky="w", padx=5, pady=10)
+        
+        ctk.CTkButton(cal_grid_container, text=">", width=30, 
+                      command=lambda: self.change_month(1)).grid(row=0, column=6, sticky="e", padx=5, pady=10)
 
         # Επικεφαλίδες ημερών (Δευ, Τρι κλπ)
         days_of_week = ["Δευ", "Τρι", "Τετ", "Πεμ", "Παρ", "Σαβ", "Κυρ"]
         for i, day in enumerate(days_of_week):
-            ctk.CTkLabel(cal_grid_container, text=day, font=('Arial', 14, 'bold')).grid(row=1, column=i, pady=(0, 5))
+            ctk.CTkLabel(cal_grid_container, text=day, font=('Arial', 14, 'bold')).grid(row=1, column=i, pady=(0, 5), sticky="")
 
         # Δημιουργία των ημερών του μήνα
         month_table = calendar.monthcalendar(self.current_year, self.current_month)
@@ -202,9 +209,11 @@ class CalendarUI:
                 if day != 0:
                     # Σύνδεση με τη συμπλήρωση των πεδίων (προαιρετικό αλλά χρήσιμο)
                     # Για την customtkinter μπήκε width σε px
-                    btn = ctk.CTkButton(cal_grid_container, text=str(day), width=30,
+                    btn = ctk.CTkButton(cal_grid_container, text=str(day), 
+                                        width=80, 
+                                        height=40,
                                     command=lambda d=day: self.fill_entries_from_cal(d))
-                    btn.grid(row=r+2, column=c, padx=2, pady=2)
+                    btn.grid(row=r+2, column=c, padx=3, pady=3)
     
     def change_month(self, delta):
         self.current_month += delta

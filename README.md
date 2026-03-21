@@ -8,14 +8,14 @@ Python Desktop Calendar & Event Manager
 ​Data Persistence: Uses a local .db file, ensuring your schedule is saved across sessions.
 ​Tech Stack
 ​Language: Python 3.x
-​GUI Library: Tkinter
+​GUI Library: GUI Library: CustomTkinter & Tkinter
 ​Database: SQLite3
 ​Date Utilities: datetime, tkcalendar
 ​Installation & Setup
 ​Clone the repository:
 git clone https://github.com/AggelosKrs/CalendarApp.git
 ​Install dependencies:
-This app requires the tkcalendar library.
-pip install tkcalendar
+This app requires the CustomTkinter and tkcalendar libraries.
+pip install customtkinter tkcalendar
 ​Run the application:
 python test.py (or the name of your script) 

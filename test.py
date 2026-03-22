@@ -102,29 +102,41 @@ class CalendarUI:
         self.current_year = now.year   # π.χ. 2026
         self.root = root
         self.root.title("Project 22 - Ηλεκτρονικό Ημερολόγιο")
-        self.root.geometry("800x850")
+        self.root.geometry("1300x600")
         self.db = CalendarDB()
         self.setup_ui()
         self.refresh_view()
 
     def setup_ui(self):
-        # --- FRAME ΕΙΣΑΓΩΓΗΣ ---
+        # Ορίζουμε την συμπεριφορά του grid layout με weights
+        self.root.grid_rowconfigure(0, weight=0) # Το πάνω μέρος του παραθύρου μένει σταθερό
+        self.root.grid_rowconfigure(1, weight=1) # Το κάτω μέρος του παραθύρου μένει σταθερό
+        self.root.grid_columnconfigure(0, weight=2) # Το αριστερό μέρος του παραθύρου είναι ελαστικό και κλέβει τον πιο πολύ χώρο
+        self.root.grid_columnconfigure(1, weight=1) # Το δεξί μέρος του παραθύρου είναι και αυτό ελαστικό αλλά του αναλογεί πιο λίγος χώρος
 
-        # Προσαρμογή σε CTk Frame με ξεχωριστό label
+        # ΠΑΝΩ ΑΡΙΣΤΕΡΑ [Frame που περιέχει το calendar]---------------------------
+        # (για να παραμένει σταθερή η θέση του σε κάθε refresh)
+        self.calendar_container = ctk.CTkFrame(self.root)
+        self.calendar_container.grid(row=0, column=0, pady=10, padx=5, sticky="nsew")
+        self.calendar_inframe()
+
+        # ΠΑΝΩ ΔΕΞΙΑ [Frame Εισαγωγής]---------------------------------------------
+        # (προσαρμογή σε CTk Frame με ξεχωριστό label)
+
         # Ένα "Outer Shell" frame που θα περιέχει τα input
-        self.main_input_frame = ctk.CTkFrame(master=self.root)
-        self.main_input_frame.pack(pady=10, padx=20, fill="x") # Pack το frame και center
+        self.main_input_frame = ctk.CTkFrame(self.root)
+        self.main_input_frame.grid(row=0, column=1, pady=10, padx=5, sticky="nsew") # fill not posible according to doc?
 
         self.input_label = ctk.CTkLabel(master = self.main_input_frame ,text="Διαχείριση Γεγονότος", font=('Arial', 14, 'bold'))
         self.input_label.pack(pady=5)
 
         # Εσωτερικό Frame που ανήκει στο main_input_frame, που θα περιέχει grid μέσα του
         in_grid_container = ctk.CTkFrame(master = self.main_input_frame, fg_color="transparent")
-        in_grid_container.pack(pady=5)
+        in_grid_container.pack(pady=5, padx=10, fill="both", expand=True) # Should i fill or expand? CHECK LATER
+        in_grid_container.grid_columnconfigure(1, weight=1) # Ελαστικότητα στην στήλη 1 (Κουτάκια Εισαγωγής)
 
         # Μετά αφήνω τα πεδία input όπως πριν απλά τα κάνω "παιδιά" του in_grid_container
         # Τα width σε customtkinter είναι σε px αντί για πλήθος char, άρα τα προσάρμόζω
-
         ctk.CTkLabel(in_grid_container, text="Τίτλος:").grid(row=0, column=0, sticky="w")
         self.ent_title = ctk.CTkEntry(in_grid_container)
         self.ent_title.grid(row=0, column=1, sticky="we", pady=2)
@@ -132,21 +144,21 @@ class CalendarUI:
         ctk.CTkLabel(in_grid_container, text="Ημερομηνία (ΗΗ/ΜΜ/ΕΕΕΕ):").grid(row=1, column=0, sticky="w")
         date_subframe = ctk.CTkFrame(in_grid_container)
         date_subframe.grid(row=1, column=1, sticky="w", pady=2)
-        self.ent_day = ctk.CTkEntry(date_subframe, width=40)
+        self.ent_day = ctk.CTkEntry(date_subframe, width=40, placeholder_text="ΗΗ")
         self.ent_day.pack(side="left")
         ctk.CTkLabel(date_subframe, text="/").pack(side="left")
-        self.ent_month = ctk.CTkEntry(date_subframe, width=40)
+        self.ent_month = ctk.CTkEntry(date_subframe, width=40, placeholder_text="ΜΜ")
         self.ent_month.pack(side="left")
         ctk.CTkLabel(date_subframe, text="/").pack(side="left")
-        self.ent_year = ctk.CTkEntry(date_subframe, width=60)
+        self.ent_year = ctk.CTkEntry(date_subframe, width=60, placeholder_text="ΕΕΕΕ")
         self.ent_year.pack(side="left")
 
         ctk.CTkLabel(in_grid_container, text="Ώρα Έναρξης (ΩΩ:ΛΛ):").grid(row=2, column=0, sticky="w")
-        self.ent_time_start = ctk.CTkEntry(in_grid_container)
+        self.ent_time_start = ctk.CTkEntry(in_grid_container, placeholder_text="ΩΩ:ΛΛ")
         self.ent_time_start.grid(row=2, column=1, sticky="w", pady=2)
 
         ctk.CTkLabel(in_grid_container, text="Ώρα Λήξης (ΩΩ:ΛΛ):").grid(row=3, column=0, sticky="w", pady=2)
-        self.ent_time_end = ctk.CTkEntry(in_grid_container)
+        self.ent_time_end = ctk.CTkEntry(in_grid_container, placeholder_text="ΩΩ:ΛΛ")
         self.ent_time_end.grid(row=3, column=1, sticky="w", pady=2)
 
         ctk.CTkLabel(in_grid_container, text="Σχόλιο:").grid(row=4, column=0, sticky="w", pady=2)
@@ -155,31 +167,38 @@ class CalendarUI:
         
         # Κουμπιά Ενεργειών
         btn_frame = ctk.CTkFrame(in_grid_container)
-        btn_frame.grid(row=5, columnspan=2, pady=10)
+        btn_frame.grid(row=5, columnspan=2, pady=10, sticky="we") # we για stretch δεξιά/αριστερά
         
         # Προσαρμογή buttons για customtkinter
-        ctk.CTkButton(btn_frame, text="Αποθήκευση", command=self.save_event, fg_color="green", text_color="white").pack(side="left", padx=5)
-        ctk.CTkButton(btn_frame, text="Διαγραφή Επιλεγμένου", command=self.delete_selected, fg_color="red", text_color="white").pack(side="left", padx=5)
-        ctk.CTkButton(btn_frame, text="Συμβάντα", command=self.refresh_view, fg_color="blue", text_color="white").pack(side="left", padx=5)
+        ctk.CTkButton(btn_frame, text="Αποθήκευση", command=self.save_event, fg_color="green", text_color="white").pack(side="left", padx=2, expand=True)
+        ctk.CTkButton(btn_frame, text="Διαγραφή Επιλεγμένου", command=self.delete_selected, fg_color="red", text_color="white").pack(side="left", padx=2, expand=True)
+        ctk.CTkButton(btn_frame, text="Συμβάντα", command=self.refresh_view, fg_color="blue", text_color="white").pack(side="left", padx=2, expand=True)
 
-        # Δημιουργία ενός Frame που θα περιέχει το calendar
-        # Για να παραμένει σταθερή η θέση του σε κάθε refresh
-        self.calendar_container = ctk.CTkFrame(self.root)
-        self.calendar_container.pack(pady=5, padx=20, fill="x")
+        # ΚΑΤΩ ΑΡΙΣΤΕΡΑ [Frame TREEVIEW (ΠΙΝΑΚΑΣ)]---------------------------------------
+        self.tree_frame = ctk.CTkFrame(self.root)
+        self.tree_frame.grid(row = 1, column=0, padx=5, pady=(0,10), sticky="nsew")
 
-        self.calendar_inframe()
-
-        # --- TREEVIEW (ΠΙΝΑΚΑΣ) ---
-        self.tree = ttk.Treeview(self.root, columns=("ID", "Τίτλος", "Σχόλιο", "Έναρξη", "Διάρκεια"), show='headings')
+        self.tree = ttk.Treeview(self.tree_frame, columns=("ID", "Τίτλος", "Σχόλιο", "Έναρξη", "Διάρκεια"), show='headings')
         self.tree.heading("ID", text="ID")
         self.tree.heading("Τίτλος", text="Τίτλος")
         self.tree.heading("Σχόλιο", text="Σχόλιο")
         self.tree.heading("Έναρξη", text="Έναρξη")
         self.tree.heading("Διάρκεια", text="Διάρκεια")
-        self.tree.column("ID", width=50)
+
+        self.tree.column("ID", width=30, stretch=False, anchor="center")
         self.tree.pack(fill="both", expand=True, padx=10, pady=10)
         # Όταν αφήνει ο χρήστης το mouse-1 πάνω σε μία εγγραφή, γεμίζω τα entries τα στοιχεία της
         self.tree.bind("<ButtonRelease-1>", self.fill_entries_from_event)
+
+        # ΚΑΤΩ ΔΕΞΙΑ [Frame Summary ημέρας]----------------------------------------------
+        self.summary_frame = ctk.CTkFrame(self.root)
+        self.summary_frame.grid(row = 1, column=1, padx=5, pady=(0,10), sticky="nsew")
+        self.summary_label = ctk.CTkLabel(master = self.summary_frame ,text="Σύνοψη Ημέρας", font=('Arial', 14, 'bold'))
+        self.summary_label.pack(pady=5)
+        
+        self.summary_txt = ctk.CTkTextbox(self.summary_frame, state="disabled", fg_color="transparent") # disabled για read-only
+        self.summary_txt.pack(fill="both", expand=True, padx=10, pady=10)
+
 
     def calendar_inframe(self):
         # ΕΛΕΓΧΟΣ: Αν υπάρχει ήδη το frame, το διαγράφουμε πριν το ξαναφτιάξουμε
@@ -189,7 +208,7 @@ class CalendarUI:
         # Προσαρμογή σε customtkinter (χωρίς φυτεμένο label στο frame)
         # Διόρθωση root σε self.root ώστε να αλλάζει δυναμικα;
         self.calendar_frame = ctk.CTkFrame(master = self.calendar_container, fg_color="transparent")
-        self.calendar_frame.pack(pady=10, fill="x", padx=10,  expand=True)
+        self.calendar_frame.pack(fill="x", padx=10, expand=True)
         self.label = ctk.CTkLabel(master = self.calendar_frame ,text="Ημερολόγιο", font=('Arial', 14, 'bold'))
         self.label.pack(pady=2, padx=10, fill="x", anchor="w")
 
@@ -223,8 +242,8 @@ class CalendarUI:
                         command=lambda: self.change_year(1)).pack(side="left", padx=(5, 10))
         
         # Για customtkinter κάνω pack ακόμα ένα container του grid των κουμπιών
-        cal_grid_container = ctk.CTkFrame(master = self.calendar_frame, fg_color="transparent",border_width=3, border_color="gray50",)#Το border το έχουμε προσορινά για να μας βοηθά στην δημιουργία του UI
-        cal_grid_container.pack(pady=5, padx=10)
+        cal_grid_container = ctk.CTkFrame(master = self.calendar_frame, fg_color="transparent")#Το border το έχουμε προσορινά για να μας βοηθά στην δημιουργία του UI
+        cal_grid_container.pack(pady=5, padx=10, fill="both", expand=True)
         
         #Το uniform="group1" θα δίνει ίδιο πλάτος για όλα
         for i in range(7):
@@ -233,7 +252,7 @@ class CalendarUI:
         # Επικεφαλίδες ημερών (Δευ, Τρι κλπ)
         days_of_week = ["Δευ", "Τρι", "Τετ", "Πεμ", "Παρ", "Σαβ", "Κυρ"]
         for i, day in enumerate(days_of_week):
-            ctk.CTkLabel(cal_grid_container, text=day, font=('Arial', 14, 'bold')).grid(row=0, column=i, pady=(0, 5), sticky="")
+            ctk.CTkLabel(cal_grid_container, text=day, font=('Arial', 14, 'bold')).grid(row=0, column=i, pady=(0, 5), sticky="we")
 
         # Δημιουργία των ημερών του μήνα
         month_table = calendar.monthcalendar(self.current_year, self.current_month)
@@ -246,7 +265,7 @@ class CalendarUI:
                                         width=60, 
                                         height=30,
                                     command=lambda d=day: self.fill_entries_from_cal(d))
-                    btn.grid(row=r+1, column=c, padx=3, pady=3)
+                    btn.grid(row=r+1, column=c, padx=3, pady=3, sticky="we")
     
     def change_month(self, delta):
         """Μέθοδος για αλλαγή μήνα"""
@@ -320,7 +339,6 @@ class CalendarUI:
             self.ent_title.delete(0, "end"); self.ent_title.insert(0, event_title)
             self.ent_comment.delete(0, "end"); self.ent_comment.insert(0, event_comment)
             
-            # Χρησιμοποιούμε int() για να φύγουν τα μηδενικά, π.χ. το "03" να γίνει "3" στα κουτάκια
             self.ent_day.delete(0, "end"); self.ent_day.insert(0, d)
             self.ent_month.delete(0, "end"); self.ent_month.insert(0, m)
             self.ent_year.delete(0, "end"); self.ent_year.insert(0, y)

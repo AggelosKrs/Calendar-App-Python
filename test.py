@@ -74,6 +74,7 @@ class CalendarDB:
     def new_event(self, event):
         """Εισαγωγή νέου γεγονότος."""
         #Ένα query το οποίο κάνει εισαγωγή στοιχείων στη βάση
+        event.notification = "1"
         qr = "INSERT INTO CalendarApp (Title, Description, Event_str, Event_fsh, Notification) VALUES (?,?,?,?,?)"
         data = (
             #Το event είναι το αντικείμένο που κληρονομεί από την κλάση Event 
@@ -204,6 +205,9 @@ class CalendarUI:
         self.summary_frame.grid(row = 1, column=1, padx=5, pady=(0,10), sticky="nsew")
         self.summary_label = ctk.CTkLabel(master = self.summary_frame ,text="Σύνοψη Ημέρας", font=('Arial', 14, 'bold'))
         self.summary_label.pack(pady=5)
+
+        self.insert_button = ctk.CTkButton(self.summary_frame, text="Αποθήκευση", command="")
+        self.insert_button.pack(side = "left", padx=40)
 
         self.summary_txt = ctk.CTkTextbox(self.summary_frame, state="disabled", fg_color="transparent") # disabled για read-only
         self.summary_txt.pack(fill="both", expand=True, padx=10, pady=10)
@@ -450,19 +454,16 @@ class CalendarUI:
         for row in self.db.load_table(day_filter):
             start = datetime.strptime(row[3], '%Y-%m-%d %H:%M')
             end = datetime.strptime(row[4], '%Y-%m-%d %H:%M')
+            status_note = row[5]
+#========================================================================================
 
-            if row[5] == 1:
-                status_text = "🔔"
-            else:
-                status_text = "-"
-            
             # Ανακατασκευή αντικειμένου Event για χρήση της get_duration
-            temp_ev = Event(row[0], row[1], row[2], start, end, status_text)
+            temp_ev = Event(row[0], row[1], row[2], start, end, status_note)
             
             # Εισαγωγή δεδομένων DB και διάρκειας στο tree
-            self.tree.insert("", "end", values=(row[0], row[1], row[2], row[3], temp_ev.get_duration(), status_text))
+            self.tree.insert("", "end", values=(row[0], row[1], row[2], row[3], temp_ev.get_duration(), status_note))
             #Για την εισαγωγή και εμφάνηση του ID θα πρέπει να φέρουμε και το row[0] μέσα στα values
-    
+#=========================================================================================  
     def update_countdowns(self):
         now = datetime.now()
     
@@ -482,14 +483,14 @@ class CalendarUI:
                         # 1. Ενημέρωση της Βάσης Δεδομένων
                     
                         # 2. Ενημέρωση του UI (Πίνακα)
-                        values[6] = "-" 
-                        values[5] = "Ξεκίνησε!"
+                        values[5] = "-" 
+                        #values[5] = "Ξεκίνησε!"
                         self.tree.item(item, values=values)
                     
                         print(f"Το συμβάν {event_id} απενεργοποιήθηκε στη βάση.")
                     else:
                         # Αν είναι ήδη 0, απλά γράψε "Σε εξέλιξη"
-                        values[5] = "Σε εξέλιξη..."
+                        values[5] = "-"
                         self.tree.item(item, values=values)
                         self.db.cursor.execute("UPDATE CalendarApp SET Notification = 0 WHERE ID = ?", (event_id,))
                         self.db.conn.commit()

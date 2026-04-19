@@ -74,7 +74,6 @@ class CalendarDB:
     def new_event(self, event):
         """Εισαγωγή νέου γεγονότος."""
         #Ένα query το οποίο κάνει εισαγωγή στοιχείων στη βάση
-        event.notification = "1"
         qr = "INSERT INTO CalendarApp (Title, Description, Event_str, Event_fsh, Notification) VALUES (?,?,?,?,?)"
         data = (
             #Το event είναι το αντικείμένο που κληρονομεί από την κλάση Event 
@@ -109,6 +108,7 @@ class CalendarUI:
         now = datetime.now() # Παίρνουμε την ώρα συστήματος (τώρα)
         self.current_month = now.month # π.χ. 3
         self.current_year = now.year   # π.χ. 2026
+        self.events_memory = {} # Το λεξικό που θα κρατάει ID, start_dt, end_dt
         self.root = root
         self.root.title("Project 22 - Ηλεκτρονικό Ημερολόγιο")
         self.root.geometry("1300x600")
@@ -134,16 +134,15 @@ class CalendarUI:
         self.tree_frame = ctk.CTkFrame(self.root)
         self.tree_frame.grid(row = 1, column=0, padx=5, pady=(0,10), sticky="nsew")
 
-        self.tree = ttk.Treeview(self.tree_frame, columns=("ID","Τίτλος", "Σχόλιο", "Έναρξη", "Διάρκεια", "Notification"), show='headings')
-        self.tree.heading("ID", text="ID")
+        self.tree = ttk.Treeview(self.tree_frame, columns=("Τίτλος", "Σχόλιο", "Έναρξη", "Διάρκεια", "Notification"), show='headings')
         self.tree.heading("Τίτλος", text="Τίτλος")
         self.tree.heading("Σχόλιο", text="Σχόλιο")
         self.tree.heading("Έναρξη", text="Έναρξη")
         self.tree.heading("Διάρκεια", text="Διάρκεια")
         self.tree.heading("Notification", text="Ειδοποίηση")
 
-        self.tree.column("ID", width=0, stretch=False, anchor="center")
         self.tree.pack(fill="both", expand=True, padx=10, pady=10)
+        
         # Όταν αφήνει ο χρήστης το mouse-1 πάνω σε μία εγγραφή, γεμίζω τα entries τα στοιχεία της
         self.tree.bind("<ButtonRelease-1>", self.fill_entries_from_event)
 
@@ -226,8 +225,17 @@ class CalendarUI:
                 # row[3] είναι το 'YYYY-MM-DD HH:MM'
                 ev_dt = datetime.strptime(row[3], '%Y-%m-%d %H:%M')
                 if ev_dt.month == self.current_month and ev_dt.year == self.current_year:
-                    # Αποθηκεύουμε το status (row[5]) με κλειδί την ημέρα
-                    events_lookup[ev_dt.day] = row[5]
+                    # Παίρνω το 0  αν δεν υπάρχει γεγονός σήμερα, αλλιώς παίρνω το status
+                    current_status = events_lookup.get(ev_dt.day, 0)
+
+                    # Με τον παρακάρω έλεγχο αν έστω και ένα γεγονός της μέρας είναι ενεργό θα έχω status 1 (Η μέρα θα μένει πράσινη αργότερα)
+                    # Ελέγχω και το τωρινό γεγονός της βάσης, και τα γεγονότα αυτής της μέρας (current_status)
+                    if int(row[5]) == 1 or int(current_status) == 1:
+                        events_lookup[ev_dt.day] = 1 # Αποθηκεύω status 1 με κλειδί την μέρα
+                    else:
+                    # Μόνο αν δεν υπάρχει κανένα ενεργό γεγονός
+                        events_lookup[ev_dt.day] = 0 # Αποθηκεύω status 0 με κλειδί την μέρα
+
             except Exception as e:
                 print(f"Error parsing date: {e}")
 
@@ -239,7 +247,7 @@ class CalendarUI:
                     button_color = "#3b8ed0"
 
                     if day in events_lookup:
-                        if events_lookup[day] == 1:
+                        if int(events_lookup[day]) == 1: # Cast ως int
                             button_color = "green"
                         else:
                             button_color = "gray"
@@ -381,15 +389,15 @@ class CalendarUI:
     def fill_entries_from_event(self, event):
         """Βοηθητική μέθοδος για να γεμίζουν τα Entries όταν πατάς ένα γεγονός του πίνακα"""
         # Αν δεν έχει επιλεχθεί κάτι
-        selected_item = self.tree.selection()
+        selected_item = self.tree.selection()[0] # (π.χ. 'I001')
         if not selected_item:
             return
         
-        # 1. Λήψη δεδομένων από τον πίνακα
-        entry_data = self.tree.item(selected_item)['values']
-        event_id = entry_data[0]
-        event_title = entry_data[1]
-        event_comment = entry_data[2]
+        # 1. Λήψη δεδομένων από τον πίνακα και ID από την μνήμη/λεξικό
+        entry_data = self.tree.item(selected_item)["values"]
+        event_id = self.events_memory[selected_item]["db_id"]
+        event_title = entry_data[0]
+        event_comment = entry_data[1]
 
         # 2. Παίρνω την ημερομηνία / ώρες από την βάση επειδή η ώρα λήξης δεν φαίνεται στον πίνακα
         self.db.cursor.execute("SELECT Event_str, Event_fsh FROM CalendarApp WHERE ID = ?", (event_id,)) # , για να το πάρει σαν λίστα
@@ -449,7 +457,7 @@ class CalendarUI:
                 messagebox.showwarning("Σύγκρουση", "Η συγκεκριμένη ώρα είναι ήδη δεσμευμένη!")
                 return
 
-            if start_dt <= now <= end_dt:
+            if now <= end_dt: # Αν βάλουμε start_dt <= now <= end_dt , σε μία αυριανή ημερομηνία now <= start_dt άρα θα μας το κάνει inactive
                 is_active = 1
             else:
                 is_active = 0
@@ -464,78 +472,101 @@ class CalendarUI:
             
 
     def delete_selected(self):
-        selected_item = self.tree.selection()
-        if not selected_item:
+        selected_items = self.tree.selection()
+        if not selected_items:
             messagebox.showwarning("Επιλογή", "Παρακαλώ επιλέξτε ένα γεγονός από τον πίνακα.")
             return
         
-        item_data = self.tree.item(selected_item)['values']
-        event_id = item_data[0]
+        selected_item = selected_items[0] # Παίρνουμε την "ταμπέλα" του tree (π.χ. 'I001')
+        event_id = self.events_memory[selected_item]["db_id"]
         
         if messagebox.askyesno("Επιβεβαίωση", "Θέλετε σίγουρα να διαγράψετε αυτό το γεγονός;"):
             self.db.delete_event(event_id)
             self.refresh_view()
 
     def refresh_view(self, day_filter=None):
-        """Καθαρίζει και ξαναγεμίζει τον πίνακα με δεδομένα από τη βάση."""
-        # Καθαρισμός
-        for i in self.tree.get_children(): self.tree.delete(i)
+        """Καθαρίζει και ξαναγεμίζει τον πίνακα, και το λεξικό events_memory με δεδομένα από τη βάση."""
+        # Καθαρισμός Tree
+        for i in self.tree.get_children(): 
+            self.tree.delete(i)
         
+        # Καθαρισμός λεξικού
+        self.events_memory.clear()
+
         # Λήψη δεδομένων από DB ανά γραμμή
         for row in self.db.load_table(day_filter):
             start = datetime.strptime(row[3], '%Y-%m-%d %H:%M')
             end = datetime.strptime(row[4], '%Y-%m-%d %H:%M')
-            status_note = row[5]
+            status_note = int(row[5]) # Μετατροπή σε ακέραιο
 #========================================================================================
 
             # Ανακατασκευή αντικειμένου Event για χρήση της get_duration
             temp_ev = Event(row[0], row[1], row[2], start, end, status_note)
             
             # Εισαγωγή δεδομένων DB και διάρκειας στο tree
-            self.tree.insert("", "end", values=(row[0], row[1], row[2], row[3], temp_ev.get_duration(), status_note))
-            #Για την εισαγωγή και εμφάνηση του ID θα πρέπει να φέρουμε και το row[0] μέσα στα values
-            #self.calendar_inframe()
-#=========================================================================================  
+            item_id = self.tree.insert("", "end", values=(row[1], row[2], row[3], temp_ev.get_duration(), " ")) # Στην ειδοποίηση βάζω προρσωρινά κενό
+            # Η insert στην tkinter θα μας δώσει το id που έχει αυτό το αντικείμενο στον πίνακα
 
+            # Εισαγωγή απαραίτητων δεδομένων στο λεξικό
+            self.events_memory[item_id] = {
+                "db_id": row[0],
+                "start": start,
+                "end": end,
+                "status": status_note
+            }
+
+            # Ανανέωση των κουμπιών (Για να έχουμε χρώματα σωστά)
+            self.calendar_inframe()
+#=========================================================================================  
 
     def update_countdowns(self):
         now = datetime.now()
     
         for item in self.tree.get_children():
+            # Για να αποφύγουμε KeyError, σε περίπτωση που υπάρχει item στο tree αλλά όχι στο λεξικό ακόμα
+            if item not in self.events_memory:
+                continue
+
+            # Παίρνουμε όλα τα δεδομένα μας για το item απο το λεξικό
+            item_mem = self.events_memory[item]
+            event_db_id = item_mem["db_id"]
+            start_dt = item_mem["start"]
+            end_dt = item_mem["end"]
+
             values = list(self.tree.item(item, 'values'))
-            event_id = values[0]
-            start_str = values[3]
-            current_status = values[5] # Η στήλη Notification 
+            #current_status = values[5] # Η στήλη Notification 
 
             try:
-                start_dt = datetime.strptime(start_str, '%Y-%m-%d %H:%M')
-            
-                # ΑΝ Ο ΧΡΟΝΟΣ ΤΕΛΕΙΩΣΕ (ή πέρασε)
-                if now >= start_dt:
-                    # Έλεγχος: Αν στη βάση/πίνακα φαίνεται ακόμα ως ενεργό 1 
-                    if current_status == "1":
-                        # 1. Ενημέρωση της Βάσης Δεδομένων
-                    
-                        # 2. Ενημέρωση του UI (Πίνακα)
-                        values[5] = "-" 
-                        #values[5] = "Ξεκίνησε!"
+                # Περίπτωση 1: Το Event είναι στο Μέλλον (Αντ. Μέτρηση)
+                if now < start_dt:
+                        diff = start_dt - now
+                        hours, remainder = divmod(diff.seconds, 3600)
+                        minutes, seconds = divmod(remainder, 60)
+                        values[5] = f"{diff.days}ημ {hours:02d}:{minutes:02d}:{seconds:02d}"
                         self.tree.item(item, values=values)
-                    
-                        print(f"Το συμβάν {event_id} απενεργοποιήθηκε στη βάση.")
-                    else:
-                        # Αν είναι ήδη 0, απλά γράψε "Σε εξέλιξη"
-                        values[5] = "-"
+                
+                # Περίπτωση 2: Το Event είναι στο Παρόν (Σε εξέλιξη)
+                elif start_dt <= now <= end_dt:
+                    if values[5] != "Σε εξέλιξη": # Για να μην ενημερώνεται το tree κάθε δευτερόλεπτο άδικα 
+                        values[5] = "Σε εξέλιξη"
                         self.tree.item(item, values=values)
-                        self.db.cursor.execute("UPDATE CalendarApp SET Notification = 0 WHERE ID = ?", (event_id,))
-                        self.db.conn.commit()
-            
+
+                # Περίπτωση 3: Το Event ήταν στο παρελθόν (Έλήξε)
                 else:
-                    # Αν είναι ακόμα στο μέλλον, δείξε την αντίστροφη μέτρηση
-                    diff = start_dt - now
-                    hours, remainder = divmod(diff.seconds, 3600)
-                    minutes, seconds = divmod(remainder, 60)
-                    values[5] = f"{diff.days}ημ {hours:02d}:{minutes:02d}:{seconds:02d}"
-                    self.tree.item(item, values=values)
+                    # Αν το Event είναι ακόμα σε εξέλιξη (Σύμφωνα με το δεδομένο στο λεξικό μας) πρέπει να το αλλάξουμε
+                    if item_mem["status"] == 1:
+                        # Αλλάζουμε το Tree στην οθόνη
+                        values[5] = "Έληξε"
+                        self.tree.item(item, values=values)
+
+                        # Ενημερώνουμε τη βάση
+                        self.db.cursor.execute("UPDATE CalendarApp SET Notification = 0 WHERE ID = ?", (event_db_id,))
+                        self.db.conn.commit()
+
+                        # Ενημερώνουμε την "μνήμη" μας για να μην ξανατρέξει το UPDATE
+                        item_mem["status"] = 0
+                        self.calendar_inframe() # Ανανέωση κουμπιών για να αλλάξει το χρώμα
+                        print(f"Το συμβάν {event_db_id} έληξε και απενεργοποιήθηκε στη βάση.")
 
             except Exception as e:
                 print(f"Σφάλμα στο countdown: {e}")

@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 #pip3 install tkcalendar --user
 from tkcalendar import *
 import calendar
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
 # Maybe use this colour for the theme later? "#D3C4B7"
 
@@ -102,9 +104,35 @@ class CalendarDB:
         return self.cursor.fetchall()
 
     def delete_event(self, event_id):
-        #Διαγράφει ένα γεγονός βάσει ID.
+        """Διαγράφει ένα γεγονός βάσει ID."""
         self.cursor.execute("DELETE FROM CalendarApp WHERE ID = ?", (event_id,))
         self.conn.commit()
+
+    def get_yearly_stats(self, year):
+        """Επιστρέφει μια λίστα με το πλήθος των γεγονότων ανά μήνα για το επιλεγμένο έτος."""
+        # Φτιάχνουμε μια άδεια λίστα με 12 μηδενικά (Ιαν - Δεκ)
+        monthly_counts = [0] * 12
+
+        # Φέρνει μόνο την έναρξη (Event_str) για όσα γεγονότα ανήκουν στη χρονιά
+        # Το f"{year}-%" μεταφράζεται π.χ. σε "2026-%", άρα πιάνει όλα τα "2026-01...", "2026-02..."
+        self.cursor.execute("SELECT Event_str FROM CalendarApp WHERE Event_str LIKE ?", (f"{year}-%",))
+        rows = self.cursor.fetchall()
+
+        # Για κάθε γεγονός προσθέτω +1 στο monthly_count στο οποίο ανήκει
+        for row in rows:
+            # Το row[0] είναι ένα κείμενο τύπου "YYYY-MM-DD ΩΩ:ΛΛ"
+            # Με το split('-')[1] κόβουμε το string και κρατάμε μόνο το 'ΜΜ' (δηλαδή τον μήνα)
+            month_str = row[0].split('-')[1]
+            
+            # Βρίσκουμε το σωστό index για αυτό τον μήνα στον οποίο αναφέρεται το γεγονός
+            # Αφαιρούμε 1 επειδή οι λίστες ξεκινάνε από το 0 (Ιανουάριος = Index 0).
+            # Το μετατρέπουμε σε ακέραιο (πχ το '03' θα γίνει 3). 
+            month_index = int(month_str) - 1
+
+            # Προσθέτουμε +1 γεγονός στον αντίστοιχο μήνα
+            monthly_counts[month_index] += 1
+
+        return monthly_counts
 
 # --- 3. ΓΡΑΦΙΚΟ ΠΕΡΙΒΑΛΛΟΝ (GUI) ---
 class CalendarUI:
@@ -117,7 +145,7 @@ class CalendarUI:
         self.events_memory = {} # Το λεξικό που θα κρατάει ID, start_dt, end_dt
         self.root = root
         self.root.title("Project 22 - Ηλεκτρονικό Ημερολόγιο")
-        self.root.geometry("1300x650")
+        self.root.geometry("1300x900")
         self.db = CalendarDB()
         self.setup_ui()
         self.refresh_view()
@@ -135,14 +163,12 @@ class CalendarUI:
         self.calendar_inframe()
         self.manage_event()
 
-
         # ΚΑΤΩ ΑΡΙΣΤΕΡΑ [Frame TREEVIEW (ΠΙΝΑΚΑΣ)]---------------------------------------
         self.tree_frame = ctk.CTkFrame(self.root)
         self.tree_frame.grid(row = 1, column=0, padx=5, pady=(0,10), sticky="nsew")
 
-        self.tree = ttk.Treeview(self.tree_frame, columns=("Τίτλος", "Σχόλιο", "Έναρξη", "Διάρκεια", "Notification"), show='headings')
+        self.tree = ttk.Treeview(self.tree_frame, columns=("Τίτλος", "Έναρξη", "Διάρκεια", "Notification"), show='headings')
         self.tree.heading("Τίτλος", text="Τίτλος")
-        self.tree.heading("Σχόλιο", text="Σχόλιο")
         self.tree.heading("Έναρξη", text="Έναρξη")
         self.tree.heading("Διάρκεια", text="Διάρκεια")
         self.tree.heading("Notification", text="Ειδοποίηση")
@@ -157,23 +183,9 @@ class CalendarUI:
         # Όταν αφήνει ο χρήστης το mouse-1 πάνω σε μία εγγραφή, γεμίζω τα entries τα στοιχεία της
         self.tree.bind("<ButtonRelease-1>", self.fill_entries_from_event)
 
-        # ΚΑΤΩ ΔΕΞΙΑ [Frame Summary ημέρας]----------------------------------------------
-        self.summary_frame = ctk.CTkFrame(self.root)
-        self.summary_frame.grid(row = 1, column=1, padx=5, pady=(0,10), sticky="nsew")
-
-        # Frame για Περιγραφή του box "Σύνοψη" και button "Εκκαθαριση Πεδίων"
-        summary_top_frame = ctk.CTkFrame(self.summary_frame, fg_color="transparent")
-        summary_top_frame.pack(fill="x", pady=5)
-
-        # Label Σύνοψης
-        self.summary_label = ctk.CTkLabel(master=summary_top_frame, text="Σύνοψη Ημέρας", font=('Arial', 14, 'bold'))
-        self.summary_label.pack(side="left", padx=10, pady=5)
-
-        self.clear_btn = ctk.CTkButton(summary_top_frame, text="Εκκαθάριση Πεδίων", width=120, command=self.clear_entries, fg_color="#e74c3c", hover_color="#c0392b")
-        self.clear_btn.pack(side="right", padx=10, pady=5)
-
-        self.summary_txt = ctk.CTkTextbox(self.summary_frame, state="disabled", fg_color="#F9F9F9", text_color="black", font=('Arial', 13)) 
-        self.summary_txt.pack(fill="both", expand=True, padx=10, pady=10)
+        # ΚΑΤΩ ΔΕΞΙΑ [Γράφημα & Σχόλιο]---------------------------
+        self.summary_inframe()
+        self.draw_graph()
 
     def calendar_inframe(self):
 
@@ -299,11 +311,11 @@ class CalendarUI:
         # Μετά αφήνω τα πεδία input όπως πριν απλά τα κάνω "παιδιά" του in_grid_container
         ctk.CTkLabel(in_grid_container, text="Τίτλος:").grid(row=0, column=0, sticky="w")
         self.ent_title = ctk.CTkEntry(in_grid_container)
-        self.ent_title.grid(row=0, column=1, sticky="we", pady=2)
+        self.ent_title.grid(row=0, column=1, sticky="we", padx=5, pady=2)
 
-        ctk.CTkLabel(in_grid_container, text="Ημερομηνία (ΗΗ/ΜΜ/ΕΕΕΕ):").grid(row=1, column=0, sticky="w")
+        ctk.CTkLabel(in_grid_container, text="Ημερομηνία:").grid(row=1, column=0, sticky="w")
         date_subframe = ctk.CTkFrame(in_grid_container)
-        date_subframe.grid(row=1, column=1, sticky="w", pady=2)
+        date_subframe.grid(row=1, column=1, sticky="w", padx=5, pady=2)
         self.ent_day = ctk.CTkEntry(date_subframe, width=40, placeholder_text="ΗΗ")
         self.ent_day.pack(side="left")
         ctk.CTkLabel(date_subframe, text="/").pack(side="left")
@@ -313,17 +325,17 @@ class CalendarUI:
         self.ent_year = ctk.CTkEntry(date_subframe, width=60, placeholder_text="ΕΕΕΕ")
         self.ent_year.pack(side="left")
 
-        ctk.CTkLabel(in_grid_container, text="Ώρα Έναρξης (ΩΩ:ΛΛ):").grid(row=2, column=0, sticky="w")
+        ctk.CTkLabel(in_grid_container, text="Ώρα Έναρξης:").grid(row=2, column=0, sticky="w")
         self.ent_time_start = ctk.CTkEntry(in_grid_container, placeholder_text="ΩΩ:ΛΛ")
-        self.ent_time_start.grid(row=2, column=1, sticky="w", pady=2)
+        self.ent_time_start.grid(row=2, column=1, sticky="w", padx=5, pady=2)
 
-        ctk.CTkLabel(in_grid_container, text="Ώρα Λήξης (ΩΩ:ΛΛ):").grid(row=3, column=0, sticky="w", pady=2)
+        ctk.CTkLabel(in_grid_container, text="Ώρα Λήξης:").grid(row=3, column=0, sticky="w", pady=2)
         self.ent_time_end = ctk.CTkEntry(in_grid_container, placeholder_text="ΩΩ:ΛΛ")
-        self.ent_time_end.grid(row=3, column=1, sticky="w", pady=2)
+        self.ent_time_end.grid(row=3, column=1, sticky="w", padx=5, pady=2)
 
         ctk.CTkLabel(in_grid_container, text="Σχόλιο:").grid(row=4, column=0, sticky="w", pady=2)
-        self.ent_comment = ctk.CTkEntry(in_grid_container)
-        self.ent_comment.grid(row=4, column=1, sticky="we", pady=2)
+        self.ent_comment = ctk.CTkTextbox(in_grid_container, height=80)
+        self.ent_comment.grid(row=4, column=1, sticky="we", padx=5, pady=2)
         
         # Κουμπιά Ενεργειών
         btn_frame = ctk.CTkFrame(in_grid_container)
@@ -334,19 +346,86 @@ class CalendarUI:
         ctk.CTkButton(btn_frame, text="Διαγραφή", command=self.delete_selected, fg_color="#c0392b", hover_color="#e74c3c", text_color="white").pack(side="left", padx=5, expand=True)
         ctk.CTkButton(btn_frame, text="Εμφάνιση Όλων", command=self.refresh_view, fg_color="#2980b9", hover_color="#3498db", text_color="white").pack(side="left", padx=5, expand=True)        
 
-    def clear_entries(self):
+    def summary_inframe(self):
+        # ΚΑΤΩ ΔΕΞΙΑ [Γράφημα & Σχόλιο]---------------------------
+        self.summary_frame = ctk.CTkFrame(self.root)
+        self.summary_frame.grid(row=1, column=1, padx=5, pady=(0,10), sticky="nsew")
+
+        # Εφαρμογή του 70/30 Split με grid weights
+        self.summary_frame.grid_columnconfigure(0, weight=1)
+        self.summary_frame.grid_rowconfigure(0, weight=7) # Δίνουμε βαρύτητα 7 (70%)
+        self.summary_frame.grid_rowconfigure(1, weight=3) # Δίνουμε βαρύτητα 3 (30%)
+
+        # Frame για Γράφημα (Πάνω μέρος, πιάνει το Row 0)
+        self.graph_frame = ctk.CTkFrame(self.summary_frame, fg_color="transparent")
+        self.graph_frame.grid(row=0, column=0, sticky="nsew", pady=(5, 5))
+
+        # Frame για Comment (Κάτω μέρος, πιάνει το Row 1)
+        self.comment_frame = ctk.CTkFrame(self.summary_frame, fg_color="transparent")
+        self.comment_frame.grid(row=1, column=0, sticky="nsew")
+
+        # Προσθήκη των στοιχείων του Comment
+        ctk.CTkLabel(master=self.comment_frame, text="Προβολή Σχολίου:", font=('Arial', 14, 'bold')).pack(fill="x")
+        self.summary_txt = ctk.CTkTextbox(self.comment_frame, state="disabled", fg_color="#F9F9F9", text_color="black", font=('Arial', 13)) 
+        self.summary_txt.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+    def draw_graph(self):
+        """Σχεδιάζει ράβδους γεγονότων ανά μήνα μέσα στο self.graph_frame"""
+
+        # Μικρό Description μηνών για το γράφημα
+        short_months = ["Ιαν", "Φεβ", "Μαρ", "Απρ", "Μαι", "Ιουν", "Ιουλ", "Αυγ", "Σεπ", "Οκτ", "Νοε", "Δεκ"]
+
+        # Παίρνουμε τα στατιστικά: 
+        stats = self.db.get_yearly_stats(self.current_year)
+        
+        # Καθαρίζουμε το παλιό γράφημα (αν υπάρχει)
+        for widget in self.graph_frame.winfo_children(): # Όλα τα αντικείμενα του self.graph_frame
+            widget.destroy()
+        
+        # Φτιάχνουμε το νέο γράφημα του Matplotlib (με Figure και FigureCanvasTkAgg για να γίνει embed και όχι pop-up window)
+        fig = Figure(figsize=(5, 3), dpi=100)
+        fig.patch.set_facecolor('#F9F9F9') # Ίδιο χρώμα με το φόντο
+        ax = fig.add_subplot(111) 
+        ax.set_facecolor('#F9F9F9')
+
+        # Αφαίρεση του περιγράμματος γύρω από το γράφημα
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        
+        # Σχεδίαση μπάρας
+        bars = ax.bar(short_months, stats, color="#2980b9", width=0.6) # Μπλε χρώμα
+
+        # Τίτλος και ρυθμίσεις αξόνων
+        #ax.set_title(f"Γεγονότα ανά Μήνα ({self.current_year})", fontsize=10, fontweight='bold') # Label γραφήματος
+        ax.tick_params(axis='x', labelsize=9, rotation=45) # Γυρνάμε τα ονόματα των μηνών 45 μοίρες
+        ax.tick_params(axis='y', labelsize=9)
+
+        # Προσθήκη του αριθμού γεγονότων πάνω από κάθε μπάρα (αν δεν είναι 0)
+        for bar in bars:
+            event_count = bar.get_height()
+            if event_count > 0:
+                ax.text(bar.get_x() + bar.get_width()/2, event_count + 0.1, int(event_count), ha='center', va='bottom', fontsize=9)
+
+        # Ενσωμάτωση στο self.graph_frame
+        fig.tight_layout() # Προσαρμόζει αυτόματα τα περιθώρια
+        canvas = FigureCanvasTkAgg(fig, master=self.graph_frame)
+        canvas.draw()
+        ctk.CTkLabel(master=self.graph_frame, text=f"Γεγονότα ανά Μήνα ({self.current_year})", font=('Arial', 14, 'bold')).pack(fill="x")
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=(0,5))
+
+    def clear_entries(self, day_filter=None): # Φίλτρο ημέρας που θα περαστεί στην refresh_view αν χρειάζεται, όπως πχ όταν καλείται από delete_selected
         """Καθαρίζει τα πεδία εισαγωγής και το TextBox της σύνοψης"""
         self.ent_title.delete(0, "end")
-        self.ent_comment.delete(0, "end")
+        self.ent_comment.delete("1.0", "end") # Το comment είναι textbox και δεν δέχεται την .delete(0, "end")
         self.ent_day.delete(0, "end")
         self.ent_month.delete(0, "end")
         self.ent_year.delete(0, "end")
         self.ent_time_start.delete(0, "end")
         self.ent_time_end.delete(0, "end")
-        self.update_summary_box("Επιλέξτε ένα γεγονός από την λίστα ή από το ημερολόγιο για σύνοψη.")
-        self.refresh_view()
+        self.update_comment_box("Επιλέξτε ένα γεγονός από την λίστα")
+        self.refresh_view(day_filter)
 
-    def update_summary_box(self, text):
+    def update_comment_box(self, text):
         """Βοηθητική μέθοδος για την ενημέρωση του TextBox σύνοψης"""
         self.summary_txt.configure(state="normal")
         self.summary_txt.delete("1.0", "end")
@@ -398,16 +477,19 @@ class CalendarUI:
         if self.current_month > 12:
             self.current_month = 1
             self.current_year += 1
+            self.draw_graph() # Reload graph για νέα χρονιά
         #Εδώ ακριβός το ανάποδο από το if
         elif self.current_month < 1:
             self.current_month = 12
             self.current_year -= 1
+            self.draw_graph() # Reload graph για νέα χρονιά
         self.calendar_inframe() # Κλήση της σωστής μεθόδου
 
     def change_year(self, delta):
         """Νέα μέθοδος για αλλαγή έτους"""
         self.current_year += delta
-        self.calendar_inframe()
+        self.calendar_inframe() # Reload calendar
+        self.draw_graph() # Reload graph
     
     def fill_entries_from_cal(self, day):
         """Βοηθητική μέθοδος για να γεμίζουν τα Entries όταν πατάς μια μέρα"""
@@ -435,7 +517,7 @@ class CalendarUI:
         entry_data = self.tree.item(selected_item)["values"]
         event_id = self.events_memory[selected_item]["db_id"]
         event_title = entry_data[0]
-        event_comment = entry_data[1]
+        event_comment = self.events_memory[selected_item]["comment"]
 
         # 2. Παίρνω την ημερομηνία / ώρες από την βάση επειδή η ώρα λήξης δεν φαίνεται στον πίνακα
         self.db.cursor.execute("SELECT Event_str, Event_fsh FROM CalendarApp WHERE ID = ?", (event_id,)) # , για να το πάρει σαν λίστα
@@ -461,7 +543,7 @@ class CalendarUI:
 
             # 3. Καθαρισμός και Εισαγωγή στα CTk Entries
             self.ent_title.delete(0, "end"); self.ent_title.insert(0, event_title)
-            self.ent_comment.delete(0, "end"); self.ent_comment.insert(0, event_comment)
+            self.ent_comment.delete("1.0", "end"); self.ent_comment.insert("1.0", event_comment)
             
             self.ent_day.delete(0, "end"); self.ent_day.insert(0, d)
             self.ent_month.delete(0, "end"); self.ent_month.insert(0, m)
@@ -469,6 +551,9 @@ class CalendarUI:
             
             self.ent_time_start.delete(0, "end"); self.ent_time_start.insert(0, time_start)
             self.ent_time_end.delete(0, "end"); self.ent_time_end.insert(0, time_end)
+
+            # Ενημέρωση του TextBox κάτω δεξιά
+            self.update_comment_box(event_comment)
 
     def save_event(self):
         try:
@@ -484,11 +569,12 @@ class CalendarUI:
             # 3. Ορισμός λήξης
             end_dt = datetime.strptime(f"{y}-{m}-{d} {t_end}", "%Y-%m-%d %H:%M")
 
-            # 5. Έλεγχος Επικάλυψης
+            # 4. Η λήξη πρέπει να είναι μετά την έναρξη
             if end_dt <= start_dt:
                 messagebox.showwarning("Εσφαλμένη Ώρα", "Η ώρα λήξης πρέπει να είναι μετά την ώρα έναρξης!")
                 return
-            
+
+            # 5. Έλεγχος Επικάλυψης
             if self.db.is_slot_busy(start_dt, end_dt):
                 messagebox.showwarning("Σύγκρουση", "Η συγκεκριμένη ώρα είναι ήδη δεσμευμένη!")
                 return
@@ -499,10 +585,14 @@ class CalendarUI:
                 is_active = 0
             
             # 6. Αποθήκευση
-            new_ev = Event(None, self.ent_title.get(), self.ent_comment.get(), start_dt, end_dt, notification=is_active)
+            new_ev = Event(None, self.ent_title.get(), self.ent_comment.get("1.0", "end-1c"), start_dt, end_dt, notification=is_active)
             self.db.new_event(new_ev)
             messagebox.showinfo("Επιτυχία", "Το γεγονός προστέθηκε!")
-            self.refresh_view()
+
+            # 7. Φίλτρο για το refresh_view ώστε να προβληθεί η μέρα στην οποία ανήκει το αποθηκευμένο event
+            day_to_show = start_dt.strftime('%Y-%m-%d') # Παίρνουμε το YYYY-MM-DD
+            self.refresh_view(day_to_show) # Ανανεώνουμε μόνο για αυτή τη μέρα
+            self.draw_graph() # Reload graph (Για να περιέχει το νέο γεγονός)
         except ValueError:
             messagebox.showerror("Λάθος", "Παρακαλώ εισάγετε σωστή ημερομηνία και ώρα (π.χ. 12:00)")
             
@@ -515,10 +605,15 @@ class CalendarUI:
         
         selected_item = selected_items[0] # Παίρνουμε την "ταμπέλα" του tree (π.χ. 'I001')
         event_id = self.events_memory[selected_item]["db_id"]
+
+        # Βρίσκουμε τη μέρα που αφορά το γεγονός ΠΡΙΝ το διαγράψουμε
+        event_start = self.events_memory[selected_item]["start"]
+        day_to_show = event_start.strftime('%Y-%m-%d')
         
         if messagebox.askyesno("Επιβεβαίωση", "Θέλετε σίγουρα να διαγράψετε αυτό το γεγονός;"):
             self.db.delete_event(event_id)
-            self.clear_entries() # Η clear_entries περιέχει και την refresh_view
+            self.clear_entries(day_to_show) # Η clear_entries περιέχει και την refresh_view, με φίλτρο την ημέρα του γεγονότος που διαγράφεται
+            self.draw_graph() # Reload graph (Για να διαγραφεί το γεγονός και από το γράφημα)
 
     def refresh_view(self, day_filter=None):
         """Καθαρίζει και ξαναγεμίζει τον πίνακα, και το λεξικό events_memory με δεδομένα από τη βάση."""
@@ -540,19 +635,20 @@ class CalendarUI:
             temp_ev = Event(row[0], row[1], row[2], start, end, status_note)
             
             # Εισαγωγή δεδομένων DB και διάρκειας στο tree
-            item_id = self.tree.insert("", "end", values=(row[1], row[2], row[3], temp_ev.get_duration(), " ")) # Στην ειδοποίηση βάζω προρσωρινά κενό
+            item_id = self.tree.insert("", "end", values=(row[1], row[3], temp_ev.get_duration(), " ")) # Στην ειδοποίηση βάζω προρσωρινά κενό
             # Η insert στην tkinter θα μας δώσει το id που έχει αυτό το αντικείμενο στον πίνακα
 
             # Εισαγωγή απαραίτητων δεδομένων στο λεξικό
             self.events_memory[item_id] = {
                 "db_id": row[0],
+                "comment": row[2], # Αποθήκευση σχόλιου για χρήση σε comment box, και fill_entries_from_event
                 "start": start,
                 "end": end,
                 "status": status_note
             }
 
-            # Ανανέωση των κουμπιών (Για να έχουμε χρώματα σωστά)
-            self.calendar_inframe()
+        # Ανανέωση των κουμπιών (Για να έχουμε χρώματα σωστά)
+        self.calendar_inframe()
 #=========================================================================================  
 
     def update_countdowns(self):
@@ -577,20 +673,20 @@ class CalendarUI:
                         diff = start_dt - now
                         hours, remainder = divmod(diff.seconds, 3600)
                         minutes, seconds = divmod(remainder, 60)
-                        values[4] = f"{diff.days}ημ {hours:02d}:{minutes:02d}:{seconds:02d}"
+                        values[3] = f"{diff.days}ημ {hours:02d}:{minutes:02d}:{seconds:02d}"
                         self.tree.item(item, values=values)
                 
                 # Περίπτωση 2: Το Event είναι στο Παρόν (Σε εξέλιξη)
                 elif start_dt <= now <= end_dt:
-                    if values[4] != "Σε εξέλιξη": # Για να μην ενημερώνεται το tree κάθε δευτερόλεπτο άδικα 
-                        values[4] = "Σε εξέλιξη"
+                    if values[3] != "Σε εξέλιξη": # Για να μην ενημερώνεται το tree κάθε δευτερόλεπτο άδικα 
+                        values[3] = "Σε εξέλιξη"
                         self.tree.item(item, values=values)
 
                 # Περίπτωση 3: Το Event ήταν στο παρελθόν (Έλήξε)
                 else:
                     # Αλλάζουμε το Tree στην οθόνη, αν δεν είναι ήδη "Έληξε"
-                    if values[4] != "Έληξε":
-                        values[4] = "Έληξε"
+                    if values[3] != "Έληξε":
+                        values[3] = "Έληξε"
                         self.tree.item(item, values=values)
 
                     # Αν το Event είναι ακόμα σε εξέλιξη σύμφωνα με την μνήμη μας (λεξικό), αυτό σημαίνει οτι μόλις έληξε

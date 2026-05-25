@@ -31,7 +31,7 @@ This build initializes a fresh, empty workspace.
 ### 🛠️ Option B: Run from Source
 1. Clone the repository:
     ```bash
-    git clone https://github.com/gchorafas/Calendar-App-Python.git
+    git clone https://github.com/AggelosKrs/Calendar-App-Python
     cd Calendar-App-Python
     ```
 

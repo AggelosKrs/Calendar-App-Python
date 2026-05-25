@@ -1,5 +1,0 @@
-SELECT * FROM CalendarApp
-
-ALTER TABLE CalendarApp DROP Notifiction
-
-ALTER Table CalendarApp add Notification INTEGER

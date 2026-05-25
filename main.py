@@ -1,27 +1,28 @@
 import sqlite3
 import customtkinter as ctk
+import calendar
 from tkinter import ttk, messagebox 
 from datetime import datetime, timedelta
-#pip3 install tkcalendar --user
-from tkcalendar import *
-import calendar
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-# Maybe use this colour for the theme later? "#D3C4B7"
-
 # Βασικές ρυθμίσεις εμφάνισης
 ctk.set_appearance_mode("light")
-ctk.set_default_color_theme("blue") # Μπορούμε να αλλάξουμε σε green ή dark-blue
+ctk.set_default_color_theme("blue")
 
 # Χρώματα θέματος
 SAND_COLOR = "#D3C4B7"  
 ACTIVE_EVENT_COLOR = "#2ecc71" # Πράσινο για ενεργά
 IDLE_EVENT_COLOR = "#95a5a6"   # Γκρι για ανενεργά
 
+
 # --- 1. ΜΟΝΤΕΛΟ ΔΕΔΟΜΕΝΩΝ (MODEL) ---
 class Event:
+    """Αναπαριστά ένα μεμονωμένο γεγονός/ραντεβού στο ημερολόγιο"""
+
     def __init__(self, event_id, title, description, event_str, event_fsh, notification):
+        """Αρχικοποιεί ένα νέο αντικείμενο γεγονότος (Event)"""
+
         self.id = event_id 
         self.title = title 
         self.description = description 
@@ -31,6 +32,7 @@ class Event:
 
     def get_duration(self):
         """Υπολογίζει τη διάρκεια μεταξύ έναρξης και λήξης."""
+
         duration = self.event_fsh - self.event_str
             
         tr_sec = int(duration.total_seconds())
@@ -46,14 +48,18 @@ class Event:
 
 # --- 2. ΔΙΑΧΕΙΡΙΣΗ ΒΑΣΗΣ ΔΕΔΟΜΕΝΩΝ (DATABASE) ---
 class CalendarDB:
+    """Διαχειρίζεται τη σύνδεση, τη δημιουργία πινάκων και τα ερωτήματα στη βάση δεδομένων SQLite"""
+
     def __init__(self):
+        """Αρχικοποιεί τη σύνδεση με τη βάση δεδομένων SQLite και δημιουργεί τον απαραίτητο πίνακα αν δεν υπάρχει."""
         # Σύνδεση στη βάση - Αν δεν υπάρχει, το IF NOT EXISTS την δημιουργεί
         self.conn = sqlite3.connect("CalendarApp.db")
         self.cursor = self.conn.cursor()
         self.create_table()
 
     def create_table(self):
-        #Δημιουργεί τον πίνακα αν δεν υπάρχει ήδη.
+        """Δημιουργεί τον πίνακα CalendarApp στη βάση δεδομένων, ορίζοντας τις στήλες για ID, Τίτλο, Περιγραφή, Έναρξη, Λήξη και Ειδοποίηση"""
+
         #Τα ονόματα πρέπει να αντιστοιχούν με την βάση μας
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS CalendarApp (
@@ -68,6 +74,8 @@ class CalendarDB:
         self.conn.commit()
 
     def is_slot_busy(self, new_start, new_end):
+        """Ελέγχει αν το επιθυμητό χρονικό διάστημα επικαλύπτεται με ήδη υπάρχοντα γεγονότα στη βάση δεδομένων. Επιστρέφει True αν υπάρχει σύγκρουση"""
+
         #Ελέγχει για επικαλύψεις ωρών στη βάση.
         self.cursor.execute("SELECT Event_str, Event_fsh FROM CalendarApp")
         rows = self.cursor.fetchall()
@@ -81,10 +89,11 @@ class CalendarDB:
 
     def new_event(self, event):
         """Εισαγωγή νέου γεγονότος."""
-        #Ένα query το οποίο κάνει εισαγωγή στοιχείων στη βάση
+
+        # Ένα query το οποίο κάνει εισαγωγή στοιχείων στη βάση
         qr = "INSERT INTO CalendarApp (Title, Description, Event_str, Event_fsh, Notification) VALUES (?,?,?,?,?)"
         data = (
-            #Το event είναι το αντικείμένο που κληρονομεί από την κλάση Event 
+            # Το event είναι το αντικείμένο που κληρονομεί από την κλάση Event 
             event.title,
             event.description,
             event.event_str.strftime('%Y-%m-%d %H:%M'),
@@ -95,21 +104,25 @@ class CalendarDB:
         self.conn.commit()
 
     def load_table(self, day_filter=None):
+        """Φορτώνει τα γεγονότα από τη βάση δεδομένων ταξινομημένα χρονικά. Αν δοθεί day_filter, επιστρέφει μόνο τα γεγονότα της συγκεκριμένης ημέρας"""
+
         if day_filter:
             # Αν υπάρχει φίλτρο, φέρε μόνο όσα ξεκινούν με αυτή την ημερομηνία
             self.cursor.execute("SELECT * FROM CalendarApp WHERE Event_str LIKE ? ORDER BY Event_str", (day_filter + "%",))
         else:
-            #Φορτώνει όλα τα γεγονότα ταξινομημένα χρονικά.
+            # Φορτώνει όλα τα γεγονότα ταξινομημένα χρονικά.
             self.cursor.execute("SELECT * FROM CalendarApp ORDER BY Event_str")
         return self.cursor.fetchall()
 
     def delete_event(self, event_id):
         """Διαγράφει ένα γεγονός βάσει ID."""
+
         self.cursor.execute("DELETE FROM CalendarApp WHERE ID = ?", (event_id,))
         self.conn.commit()
 
     def get_yearly_stats(self, year):
-        """Επιστρέφει μια λίστα με το πλήθος των γεγονότων ανά μήνα για το επιλεγμένο έτος."""
+        """Επιστρέφει μια λίστα με το πλήθος των γεγονότων ανά μήνα για το επιλεγμένο έτος"""
+
         # Φτιάχνουμε μια άδεια λίστα με 12 μηδενικά (Ιαν - Δεκ)
         monthly_counts = [0] * 12
 
@@ -136,9 +149,12 @@ class CalendarDB:
 
 # --- 3. ΓΡΑΦΙΚΟ ΠΕΡΙΒΑΛΛΟΝ (GUI) ---
 class CalendarUI:
+    """Διαχειρίζεται το GUI της εφαρμογής χρησιμοποιώντας CustomTkinter"""
+
     # Λίστα από μήνες για μελλοντική χρήση στο UI (Πρώτο στοιχείο = "" ώστε 1=Ιανουάριος)
     months_desc = ["", "Ιανουάριος", "Φεβρουάριος", "Μάρτιος", "Απρίλιος", "Μάιος", "Ιούνιος", "Ιούλιος", "Αύγουστος", "Σεπτέμβριος", "Οκτώβριος", "Νοέμβριος", "Δεκέμβριος"]
     def __init__(self, root):
+        """Αρχικοποιεί το γραφικό περιβάλλον της εφαρμογής (GUI), τη σύνδεση με τη βάση, τη σημερινή ημερομηνία και ξεκινάει τις ρουτίνες ανανέωσης"""
         now = datetime.now() # Παίρνουμε την ώρα συστήματος (τώρα)
         self.current_month = now.month # π.χ. 3
         self.current_year = now.year   # π.χ. 2026
@@ -152,13 +168,15 @@ class CalendarUI:
         self.update_countdowns()
 
     def setup_ui(self):
+        """Ορίζει τη βασική διάταξη (grid layout) του παραθύρου και καλεί τις επιμέρους συναρτήσεις που χτίζουν το ημερολόγιο, τη φόρμα και τον πίνακα"""
+
         # Ορίζουμε την συμπεριφορά του grid layout με weights
         self.root.grid_rowconfigure(0, weight=0, minsize=360) # Το πάνω μέρος του παραθύρου μένει σταθερό, με minsize ώστε να παραμένει και όταν έχω λιγότερες σειρές
         self.root.grid_rowconfigure(1, weight=1) # Το κάτω μέρος του παραθύρου μένει σταθερό
         self.root.grid_columnconfigure(0, weight=2) # Το αριστερό μέρος του παραθύρου είναι ελαστικό και κλέβει τον πιο πολύ χώρο
         self.root.grid_columnconfigure(1, weight=1) # Το δεξί μέρος του παραθύρου είναι και αυτό ελαστικό αλλά του αναλογεί πιο λίγος χώρος
 
-        # ΠΑΝΩ ΑΡΙΣΤΕΡΑ [Frame που περιέχει το calendar] (για να παραμένει σταθερή η θέση του σε κάθε refresh)---------------------------
+        # ΠΑΝΩ ΑΡΙΣΤΕΡΑ [Frame που περιέχει το calendar] (για να παραμένει σταθερή η θέση του σε κάθε refresh)
         # Φτιάχνουμε το container ΕΔΩ για να μην δημιουργείται ξανά και ξανά
         self.calendar_container = ctk.CTkFrame(self.root, width=650, height=350)
         self.calendar_container.grid(row=0, column=0, pady=10, padx=5, sticky="nsew")
@@ -172,7 +190,7 @@ class CalendarUI:
         self.calendar_inframe()
         self.manage_event()
 
-        # ΚΑΤΩ ΑΡΙΣΤΕΡΑ [Frame TREEVIEW (ΠΙΝΑΚΑΣ)]---------------------------------------
+        # ΚΑΤΩ ΑΡΙΣΤΕΡΑ [Frame TREEVIEW (ΠΙΝΑΚΑΣ)]
         self.tree_frame = ctk.CTkFrame(self.root)
         self.tree_frame.grid(row = 1, column=0, padx=5, pady=(0,10), sticky="nsew")
 
@@ -239,7 +257,7 @@ class CalendarUI:
         self.cal_grid_container.pack(pady=5, padx=10, fill="both", expand=True)
 
     def calendar_inframe(self):
-        """Ανανεώνει τα κείμενα του ημερολογίου και ξαναζωγραφίζει τις ημέρες."""
+        """Σχεδιάζει το ημερολόγιο (μήνες, ημέρες, κουμπιά πλοήγησης) στο πάνω αριστερά τμήμα της εφαρμογής και χρωματίζει τις μέρες που έχουν γεγονότα."""
 
         # Ανανέωση των labels στο Navigation Bar (Δεν σβήνουμε τα κουμπιά, απλά αλλάζουμε το κείμενο)
         self.btn_month_label.configure(text=f"{self.months_desc[self.current_month]}")
@@ -304,7 +322,9 @@ class CalendarUI:
 
 
     def manage_event(self):
-        # ΠΑΝΩ ΔΕΞΙΑ [Frame Εισαγωγής]---------------------------------------------
+        """Δημιουργεί τη φόρμα εισαγωγής στοιχείων (πάνω δεξιά) με τα πεδία για τον τίτλο, την ημερομηνία, τις ώρες και το σχόλιο του γεγονότος"""
+
+        # ΠΑΝΩ ΔΕΞΙΑ [Frame Εισαγωγής]
         # (προσαρμογή σε CTk Frame με ξεχωριστό label)
 
         # Ένα "Outer Shell" frame που θα περιέχει τα input
@@ -321,7 +341,7 @@ class CalendarUI:
 
         # Μετά αφήνω τα πεδία input όπως πριν απλά τα κάνω "παιδιά" του in_grid_container
         ctk.CTkLabel(in_grid_container, text="Τίτλος:").grid(row=0, column=0, sticky="w")
-        self.ent_title = ctk.CTkEntry(in_grid_container)
+        self.ent_title = ctk.CTkEntry(in_grid_container, placeholder_text="Εισάγετε Τίτλο ή επιλέξτε ένα γεγονός")
         self.ent_title.grid(row=0, column=1, sticky="we", padx=5, pady=2)
 
         ctk.CTkLabel(in_grid_container, text="Ημερομηνία:").grid(row=1, column=0, sticky="w")
@@ -358,7 +378,9 @@ class CalendarUI:
         ctk.CTkButton(btn_frame, text="Εμφάνιση Όλων", command=self.refresh_view, fg_color="#2980b9", hover_color="#3498db", text_color="white").pack(side="left", padx=5, expand=True)        
 
     def graph_plot_inframe(self):
-        # ΚΑΤΩ ΔΕΞΙΑ [Γράφημα]---------------------------
+        """Στήνει το κάτω δεξιά τμήμα της εφαρμογής που περιέχει το ραβδόγραμμα στατιστικών"""
+
+        # ΚΑΤΩ ΔΕΞΙΑ [Γράφημα]
         # Φτιάχνουμε το graph_frame με στρογγυλές γωνίες και το βάζουμε στο root
         self.graph_frame = ctk.CTkFrame(self.root)
 
@@ -413,6 +435,7 @@ class CalendarUI:
 
     def clear_entries(self, day_filter=None): # Φίλτρο ημέρας που θα περαστεί στην refresh_view αν χρειάζεται, όπως πχ όταν καλείται από delete_selected
         """Καθαρίζει τα πεδία εισαγωγής και το TextBox της σύνοψης"""
+
         self.ent_title.delete(0, "end")
         self.ent_comment.delete("1.0", "end") # Το comment είναι textbox και δεν δέχεται την .delete(0, "end")
         self.ent_day.delete(0, "end")
@@ -420,9 +443,23 @@ class CalendarUI:
         self.ent_year.delete(0, "end")
         self.ent_time_start.delete(0, "end")
         self.ent_time_end.delete(0, "end")
+
+        # Για να συνεχίσουν να φαίνονται τα Placeholders στα CTkEntries
+        # Κάνουμε ένα "κόλπο" Focus Toggle για ΟΛΑ τα πεδία
+        # Βάζουμε στη λίστα όσα πεδία έχουν placeholder
+        entries_with_placeholders = [self.ent_title, self.ent_day, self.ent_month, self.ent_year, self.ent_time_start, self.ent_time_end]
+        
+        for entry in entries_with_placeholders:
+            entry.focus_set() # Δίνει εστίαση στιγμιαία στο καθένα
+            
+        self.root.focus_set()           # Το main window παίρνει την εστίαση στο τέλος
+        self.root.update_idletasks()    # Ζωγραφίζει ξανά την οθόνη
+
         self.refresh_view(day_filter)
 
     def show_months(self):
+        """Αντικαθιστά προσωρινά το πλέγμα των ημερών στο ημερολόγιο με ένα πλέγμα 12 κουμπιών για την επιλογή μήνα"""
+
         # Καταστρέφουμε τα κουμπιά που περιέχουν ημέρες (παιδιά της cal_grid_container)
         for item in self.cal_grid_container.winfo_children():
             item.destroy()
@@ -433,7 +470,6 @@ class CalendarUI:
                 self.cal_grid_container.grid_columnconfigure(i, weight=1, uniform="group2")
             else:
                 self.cal_grid_container.grid_columnconfigure(i, weight=0, uniform="")
-
 
         # Επανάληψη για την δημιουργία των μηνών μέσα στο grid
         for month in range(1, 13):
@@ -455,6 +491,7 @@ class CalendarUI:
 
     def select_month(self, selected_month):
         """Μέθοδος για μεταπήδηση σε συγκεκριμένο μήνα στο calendar grid"""
+
         # Αλλαγή του current μήνα
         self.current_month = selected_month
         # Καλούμε την συνάρτηση που θα ξανά ζωγραφίσει το ημερολόγιο
@@ -462,13 +499,14 @@ class CalendarUI:
 
     def change_month(self, delta):
         """Μέθοδος για αλλαγή μήνα"""
+
         self.current_month += delta
         #Σε περίπτωση που ο μήνας πάει 13 τότε πάι πάει 1 και προσθέτουμε +1 στα χρόνια
         if self.current_month > 12:
             self.current_month = 1
             self.current_year += 1
             self.draw_graph() # Reload graph για νέα χρονιά
-        #Εδώ ακριβός το ανάποδο από το if
+        #Εδώ ακριβώς το ανάποδο από το if
         elif self.current_month < 1:
             self.current_month = 12
             self.current_year -= 1
@@ -477,33 +515,45 @@ class CalendarUI:
 
     def change_year(self, delta):
         """Νέα μέθοδος για αλλαγή έτους"""
+
         self.current_year += delta
         self.calendar_inframe() # Reload calendar
         self.draw_graph() # Reload graph
     
     def fill_entries_from_cal(self, day):
         """Βοηθητική μέθοδος για να γεμίζουν τα Entries όταν πατάς μια μέρα"""
-        # 1. Φτιάχνουμε την ημερομηνία σε μορφή YYYY-MM-DD
+
+        # Φτιάχνουμε την ημερομηνία σε μορφή YYYY-MM-DD
         date_str = f"{self.current_year}-{self.current_month:02d}-{day:02d}"
 
-        # 2. Καθαρίζουμε τα υπόλοιπα πεδία
+        # Καθαρίζουμε τα υπόλοιπα πεδία
         self.ent_title.delete(0, "end")
         self.ent_time_start.delete(0, "end")
         self.ent_time_end.delete(0, "end")
         self.ent_comment.delete("1.0", "end")
     
-        # 3. Ενημερώνουμε τα κουτάκια (Entries) (Μέρα, Μήνας, Χρόνος)
-        # Για customtkinter tk.end -> "end" Απλό string
+        # Ενημερώνουμε τα κουτάκια (Entries) (Μέρα, Μήνας, Χρόνος)
         self.ent_day.delete(0, "end"); self.ent_day.insert(0, str(day))
         self.ent_month.delete(0, "end"); self.ent_month.insert(0, str(self.current_month))
         self.ent_year.delete(0, "end"); self.ent_year.insert(0, str(self.current_year))
 
+        # Για να συνεχίσουν να φαίνονται τα Placeholders στα CTkEntries
+        # Κάνουμε ένα "κόλπο" Focus Toggle για ΟΛΑ τα πεδία
+        # Βάζουμε στη λίστα όσα πεδία έχουν placeholder
+        entries_with_placeholders = [self.ent_title, self.ent_day, self.ent_month, self.ent_year, self.ent_time_start, self.ent_time_end]
+        
+        for entry in entries_with_placeholders:
+            entry.focus_set() # Δίνει εστίαση στιγμιαία στο καθένα
+            
+        self.root.focus_set()           # Το main window παίρνει την εστίαση στο τέλος
+        self.root.update_idletasks()    # Ζωγραφίζει ξανά την οθόνη
 
-        # 3. Καλούμε την refresh_view με την ημερομηνία-φίλτρο!
+        # Καλούμε την refresh_view με την ημερομηνία-φίλτρο!
         self.refresh_view(date_str)
 
     def fill_entries_from_event(self, event):
         """Βοηθητική μέθοδος για να γεμίζουν τα Entries όταν πατάς ένα γεγονός του πίνακα"""
+
         # Αν δεν έχει επιλεχθεί κάτι
         selected_item = self.tree.selection()[0] # (π.χ. 'I001')
         if not selected_item:
@@ -549,6 +599,8 @@ class CalendarUI:
             self.ent_time_end.delete(0, "end"); self.ent_time_end.insert(0, time_end)
 
     def save_event(self):
+        """Διαβάζει τα δεδομένα από τη φόρμα, ελέγχει (απουσία επικάλυψης, σωστές ώρες) και αποθηκεύει το νέο γεγονός στη βάση"""
+
         try:
             # 1. Λήψη δεδομένων
             d, m, y = self.ent_day.get(), self.ent_month.get(), self.ent_year.get()
@@ -591,6 +643,8 @@ class CalendarUI:
             
 
     def delete_selected(self):
+        """Διαγράφει το επιλεγμένο γεγονός από τον πίνακα (Treeview) και από τη βάση δεδομένων, αφού ζητήσει επιβεβαίωση από τον χρήστη"""
+
         selected_items = self.tree.selection()
         if not selected_items:
             messagebox.showwarning("Επιλογή", "Παρακαλώ επιλέξτε ένα γεγονός από τον πίνακα.")
@@ -610,6 +664,7 @@ class CalendarUI:
 
     def refresh_view(self, day_filter=None):
         """Καθαρίζει και ξαναγεμίζει τον πίνακα, και το λεξικό events_memory με δεδομένα από τη βάση."""
+
         # Καθαρισμός Tree
         for i in self.tree.get_children(): 
             self.tree.delete(i)
@@ -645,6 +700,8 @@ class CalendarUI:
 #=========================================================================================  
 
     def update_countdowns(self):
+        """Ανανεώνει την αντίστροφη μέτρηση ή την κατάσταση (Σε εξέλιξη / Έληξε) για κάθε γεγονός του πίνακα. Εκτελείται αναδρομικά κάθε 1s"""
+
         now = datetime.now()
     
         for item in self.tree.get_children():

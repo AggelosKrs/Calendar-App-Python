@@ -25,7 +25,7 @@ You can run the application either as a standalone executable or directly from t
 
 ### 📦 Option A: Executable (Clean)
 This build initializes a fresh, empty workspace.
-1. Download **`CalendarApp.exe`** from the **Releases** section on the right side of this repository.
+1. Download **`CalendarApp-Windows.exe` or `CalendarApp-Linux.tar.gz`** from the **Releases** section on the right side of this repository.
 2. Run the executable to generate a clean database file automatically.
 
 ### 🛠️ Option B: Run from Source
@@ -47,6 +47,11 @@ This build initializes a fresh, empty workspace.
 
 ### 🚀 Option C: Demo Showcase
 This build comes pre-populated with event entries across 2026 and 2027 to demonstrate the real-time countdowns and monthly Matplotlib chart statistics.
-1. Download **`CalendarApp-Demo-Showcase.zip`** from the **Releases** section on the right side of this repository.
-2. Extract the ZIP archive.
-3. Run `CalendarApp.exe` from the extracted folder.
+1. Download **`CalendarApp-Windows-Demo.zip` or `CalendarApp-Linux-Demo.tar.gz`** from the **Releases** section on the right side of this repository.
+2. Extract the  archive.
+3. Run `CalendarApp` from the extracted folder.
+
+## Demo Video
+
+https://github.com/user-attachments/assets/a3ebfe17-7e4d-4eac-915e-8cac74155c8c
+

@@ -50,16 +50,13 @@ This build initializes a fresh, empty workspace.
 
     python3 -m PyInstaller --onefile main.py
 
-    # 1. Δημιουργία του εικονικού περιβάλλοντος (env)
+    # 1.Creating the virtual environment (env)
     python3 -m venv env
 
-    # 2. Ενεργοποίησή του
-    source env/bin/activate
-
-    # 3. Εγκατάσταση του PyInstaller μέσα στο env
+    # 2. Installing PyInstaller inside the env
     pip install pyinstaller
 
-    # 4. Δημιουργία του εκτελέσιμου
+    # 3. Creating the executable
     pyinstaller --onefile main.py
 
 ### 🚀 Option C: Demo Showcase

@@ -44,6 +44,23 @@ This build initializes a fresh, empty workspace.
     ```bash
     python main.py
     ```
+4. Create α executable file:
+   
+    python3 -m pip install pyinstaller
+
+    python3 -m PyInstaller --onefile main.py
+
+    # 1. Δημιουργία του εικονικού περιβάλλοντος (env)
+    python3 -m venv env
+
+    # 2. Ενεργοποίησή του
+    source env/bin/activate
+
+    # 3. Εγκατάσταση του PyInstaller μέσα στο env
+    pip install pyinstaller
+
+    # 4. Δημιουργία του εκτελέσιμου
+    pyinstaller --onefile main.py
 
 ### 🚀 Option C: Demo Showcase
 This build comes pre-populated with event entries across 2026 and 2027 to demonstrate the real-time countdowns and monthly Matplotlib chart statistics.

@@ -44,20 +44,43 @@ This build initializes a fresh, empty workspace.
     ```bash
     python main.py
     ```
-4. Create α executable file:
-   
-    python3 -m pip install pyinstaller
+### Optional: Compile the Executable on Your Own
 
-    python3 -m PyInstaller --onefile main.py
+**On Windows:**
+1. Create and activate a virtual environment
+```bash
+python -m venv env
+call env\Scripts\activate
+```
 
-    # 1.Creating the virtual environment (env)
-    python3 -m venv env
+2. Install PyInstaller and project dependencies
+```bash
+pip install pyinstaller
+pip install -r requirements.txt
+```
 
-    # 2. Installing PyInstaller inside the env
-    pip install pyinstaller
+3. Build the executable
+```bash
+pyinstaller --onefile --windowed --collect-all customtkinter --collect-all tkcalendar --collect-all matplotlib main.py
+```
 
-    # 3. Creating the executable
-    pyinstaller --onefile main.py
+**On Linux:**
+1. Create and activate a virtual environment
+```bash
+python3 -m venv env
+source env/bin/activate
+```
+
+2. Install PyInstaller and project dependencies
+```bash
+pip install pyinstaller
+pip install -r requirements.txt
+```
+
+3. Build the executable
+```bash
+pyinstaller --onefile --windowed --collect-all customtkinter --collect-all tkcalendar --collect-all matplotlib main.py
+```
 
 ### 🚀 Option C: Demo Showcase
 This build comes pre-populated with event entries across 2026 and 2027 to demonstrate the real-time countdowns and monthly Matplotlib chart statistics.
